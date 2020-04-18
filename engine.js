@@ -5,6 +5,14 @@ var map = require('lodash.map');
 var longest = require('longest');
 var rightPad = require('right-pad');
 var chalk = require('chalk');
+var fs = require('fs');
+var path = require('path');
+
+var getDirs = function(p) {
+  return fs.readdirSync(p).filter(function(f) {
+    return fs.lstatSync(path.join(p, f)).isDirectory();
+  });
+};
 
 var filter = function(array) {
   return array.filter(function(x) {
@@ -48,6 +56,10 @@ module.exports = function(options) {
     };
   });
 
+  var scopeValidation = function(scope) {
+    return scope.length === 0 ? 'Scope is required' : true;
+  };
+
   return {
     // When a user runs `git cz`, prompter will
     // be executed. We pass you cz, which currently
@@ -77,16 +89,25 @@ module.exports = function(options) {
           default: options.defaultType
         },
         {
+          type: 'checkbox',
+          name: 'scope',
+          message: 'Select the scope of this change from the list:',
+          choices: [...getDirs(options.scopePath), 'other'],
+          filter: function(scope) {
+            return scope.join(', ');
+          },
+          validate: scopeValidation
+        },
+        {
           type: 'input',
           name: 'scope',
           message:
-            'What is the scope of this change (e.g. component or file name): (press enter to skip)',
+            'Describe the scope of this change (e.g. component or file name):',
           default: options.defaultScope,
-          filter: function(value) {
-            return options.disableScopeLowerCase
-              ? value.trim()
-              : value.trim().toLowerCase();
-          }
+          when: function(answers) {
+            return answers.scope === 'other';
+          },
+          validate: scopeValidation
         },
         {
           type: 'input',
@@ -102,7 +123,7 @@ module.exports = function(options) {
           validate: function(subject, answers) {
             var filteredSubject = filterSubject(subject);
             return filteredSubject.length == 0
-              ? 'subject is required'
+              ? 'Subject is required'
               : filteredSubject.length <= maxSummaryLength(options, answers)
               ? true
               : 'Subject length must be less than or equal to ' +
@@ -198,7 +219,11 @@ module.exports = function(options) {
         };
 
         // parentheses are only needed when a scope is present
-        var scope = answers.scope ? '(' + answers.scope + ')' : '';
+        var scope = `(${
+          options.disableScopeLowerCase
+            ? answers.scope.trim()
+            : answers.scope.trim().toLowerCase()
+        })`;
 
         // Hard limit this line in the validate
         var head = answers.type + scope + ': ' + answers.subject;
